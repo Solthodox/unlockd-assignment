@@ -2,5 +2,17 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc_version = "0.8.21"
+auto_detect_solc = false
+optimizer = true
+optimizer_runs = 1_000
+gas_limit = 100_000_000
+gas_reposts = ["*"]
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[fmt]
+line_length = 100 
+
+remappings = [
+    "solady/src/=lib/solady/src/",
+]
