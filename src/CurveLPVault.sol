@@ -11,13 +11,17 @@ import {ICurvePool} from "./interfaces/ICurvePool.sol";
 /// @notice implements the Convex functions for Curve liquidity providers
 /// @notice best approach would be ERC4626 but since you asked for {deposit} and {withdraw} functions only:
 contract CurveLPVault is ERC20 {
-    /// ERRORS
+    /*///////////////////////////////////////////////////////////////
+                            ERRORS
+    //////////////////////////////////////////////////////////////*/
     error CurveLPVault__Deposit_AmountIsZero();
     error CurveLPVault__Deposit_CouldNotDeposit();
     error CurveLPVault__Withdraw_CouldNotWithdraw();
     error CurveLPVault__Compound_ClaimNotWorking();
 
-    /// EVENTS
+    /*///////////////////////////////////////////////////////////////
+                            EVENTS
+    //////////////////////////////////////////////////////////////*/
     event Deposit(address indexed depositor, uint256 indexed amountUnderlying);
     event Withdraw(
         address indexed withdrawer, uint256 indexed shares, uint256 indexed amountUnderlying
@@ -25,8 +29,18 @@ contract CurveLPVault is ERC20 {
 
     using SafeTransferLib for address;
 
+    /*///////////////////////////////////////////////////////////////
+                            CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Convex token
+    address constant CVX = 0x4e3FBD56CD56c3e72c1403e103b45Db9da5B9D2B;
+
     /// @notice Curve DAO Token
     address constant CRV = 0xD533a949740bb3306d119CC777fa900bA034cd52;
+
+    /// @notice ETH/CVX curve vault
+    address constant ETH_CVX = 0xB576491F1E6e5E62f1d8F26062Ee822B40B0E0d4;
 
     /// @notice Lido sETH token
     address constant SETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
@@ -51,6 +65,11 @@ contract CurveLPVault is ERC20 {
 
     /// @notice The id of the pool in Booster
     uint256 constant POOL_ID = 25;
+
+
+    /*///////////////////////////////////////////////////////////////
+                        DEPOSIT/WITHDRAW LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     function _deposit(uint256 amount) internal {
         UNDERLYNG_ASSET.safeApprove(CONVEX_BOOSTER, amount);
@@ -86,39 +105,56 @@ contract CurveLPVault is ERC20 {
         emit Withdraw(msg.sender, amount, amountUnderlying);
     }
 
+    /*///////////////////////////////////////////////////////////////
+                        COMPOUND/CALCULATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @return the underlying tokens(initial deposit + yield) of a user
     function balanceOfUnderlying(address account) external view returns (uint256) {
         return _calculateUnderlyingBalance(balanceOf(account));
     }
-
-    function totalAssets() public view virtual returns (uint256){
+    
+    /// @return the total underlying tokens held by the vault
+    function totalAssets() public view virtual returns (uint256) {
         return POOL_REWARDER.balanceOf(address(this));
     }
-
 
     function _calculateUnderlyingBalance(uint256 balance) private view returns (uint256) {
         return POOL_REWARDER.balanceOf(address(this)) * balance / totalSupply();
     }
 
-    /// @notice reinvests the crv rewards to increase the position in the underlying token
+    /// @notice reinvests the crv and cvx rewards to increase the position in the underlying token
     function compoundRewards() external returns (bool) {
-        // claim crv rewards from stake contract
+        // claim crv and cvx rewards from stake contract
         if (!IRewards(POOL_REWARDER).getReward(address(this), false)) {
             revert CurveLPVault__Compound_ClaimNotWorking();
         }
+
         uint256 crvBalance = CRV.balanceOf(address(this));
-        if (crvBalance == 0) return false;
-        CRV.safeApprove(TRICRV, crvBalance);
-        uint256 amountETH =
-            ICurvePool(TRICRV).exchange_underlying(2, 1, crvBalance, 0, address(this));
-        // get ETH
+        uint256 cvxBalance = CVX.balanceOf(address(this));
+        if (crvBalance == 0 && cvxBalance == 0) return false;
+
+        uint256 amountETH;
+        if (cvxBalance > 0) {
+            // exchange cvx for eth
+            CVX.safeApprove(ETH_CVX, cvxBalance);
+            amountETH = ICurvePool(ETH_CVX).exchange(1, 0, cvxBalance, 0, true);
+        }
+
+        if (crvBalance > 0) {
+            CRV.safeApprove(TRICRV, crvBalance);
+            // exchange crv for eth
+            amountETH += ICurvePool(TRICRV).exchange_underlying(2, 1, crvBalance, 0, address(this));
+        }
         ICurvePool underlyingPool = ICurvePool(UNDERLYING_POOL);
-        uint256 swapAmountETH = amountETH;
-        // get SETH
-        uint256 amountSETH = underlyingPool.exchange{value: swapAmountETH}(0, 1, swapAmountETH, 0);
+        uint256 exchangeAmountETH = amountETH / 2;
+        // exchange half of eth for seth
+        uint256 amountSETH = underlyingPool.exchange{value: exchangeAmountETH}(0, 1, exchangeAmountETH, 0);
         SETH.safeApprove(UNDERLYING_POOL, amountSETH);
         // add liquidity to mint more LP tokens
-        uint256 mintedLiquidity =
-            underlyingPool.add_liquidity([amountETH - swapAmountETH, amountSETH], 0);
+        uint256 mintedLiquidity = underlyingPool.add_liquidity{value: amountETH - exchangeAmountETH}(
+            [amountETH - exchangeAmountETH, amountSETH], 0
+        );
         UNDERLYNG_ASSET.safeApprove(CONVEX_BOOSTER, mintedLiquidity);
         // deposit the LP tokens in the Booster again
         if (!IBooster(CONVEX_BOOSTER).deposit(POOL_ID, mintedLiquidity, true)) {
@@ -126,6 +162,12 @@ contract CurveLPVault is ERC20 {
         }
         return true;
     }
+
+    receive() external payable {}
+
+    /*///////////////////////////////////////////////////////////////
+                            FUNCTION OVERRIDES
+    //////////////////////////////////////////////////////////////*/
 
     function name() public pure override returns (string memory) {
         return "Curve.fi ETH/stETH Vault";
@@ -135,5 +177,4 @@ contract CurveLPVault is ERC20 {
         return "steCRVv";
     }
 
-    receive() external payable {}
 }

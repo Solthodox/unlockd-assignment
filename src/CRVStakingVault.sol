@@ -10,10 +10,16 @@ import {ICurvePool} from "./interfaces/ICurvePool.sol";
 
 /// @notice implements the Convex functions for CRV stakers
 contract CRVStakingVault is ERC20 {
+    /*///////////////////////////////////////////////////////////////
+                            ERRORS
+    //////////////////////////////////////////////////////////////*/
     error CRVStakingVault__Deposit_AmountIsZero();
     error CRVStakingVault__Withdraw_CouldNotWithdraw();
     error CRVStakingVault__Compound_ClaimNotWorking();
 
+    /*///////////////////////////////////////////////////////////////
+                            EVENTS
+    //////////////////////////////////////////////////////////////*/
     event Deposit(address indexed depositor, uint256 indexed amountUnderlying);
     event Withdraw(
         address indexed withdrawer, uint256 indexed shares, uint256 indexed amountUnderlying
@@ -21,8 +27,20 @@ contract CRVStakingVault is ERC20 {
 
     using SafeTransferLib for address;
 
+    /*///////////////////////////////////////////////////////////////
+                            CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Convex's CRV representation token
     address constant CVXCRV = 0x62B9c7356A2Dc64a1969e19C23e4f579F9810Aa7;
+
+    /// @notice Convex troken
+    address constant CVX = 0x4e3FBD56CD56c3e72c1403e103b45Db9da5B9D2B;
+
+    /// @notice TriCRV pool used to exchange crv rewards for eth
+    address constant TRICRV = 0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14;
+
+    address constant ETH_CVX = 0xB576491F1E6e5E62f1d8F26062Ee822B40B0E0d4;
 
     /// @notice Rewards contract for CVXCRV
     address constant CVXCRV_REWARDER = 0x3Fe65692bfCD0e6CF84cB1E7d24108E434A7587e;
@@ -41,6 +59,12 @@ contract CRVStakingVault is ERC20 {
 
     /// @notice Convex helper contract to deposit Crv
     address constant CONVEX_CRV_DEPOSITOR = 0x8014595F2AB54cD7c604B00E9fb932176fDc86Ae;
+
+
+    /*///////////////////////////////////////////////////////////////
+                        DEPOSIT/WITHDRAW LOGIC
+    //////////////////////////////////////////////////////////////*/
+
 
     function _deposit(uint256 amount) internal {
         UNDERLYNG_ASSET.safeApprove(CONVEX_CRV_DEPOSITOR, amount);
@@ -77,11 +101,18 @@ contract CRVStakingVault is ERC20 {
         emit Withdraw(msg.sender, amount, amountOut);
     }
 
+    /*///////////////////////////////////////////////////////////////
+                        COMPOUND/CALCULATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @return the underlying tokens(initial deposit + yield) of a user
+    /// @notice the amount is calculated in cvxCRV, exchanging them for CRV will cause slippage
     function balanceOfUnderlying(address account) external view returns (uint256) {
         return _calculateUnderlyingBalance(balanceOf(account));
     }
 
-    function totalAssets() public view virtual returns (uint256){
+    /// @return the total underlying tokens held by the vault
+    function totalAssets() public view virtual returns (uint256) {
         return CVXCRV_REWARDER.balanceOf(address(this));
     }
 
@@ -94,15 +125,25 @@ contract CRVStakingVault is ERC20 {
         if (!IRewards(CVXCRV_REWARDER).getReward(address(this), false)) {
             revert CRVStakingVault__Compound_ClaimNotWorking();
         }
+        uint256 cvxBalance = CVX.balanceOf(address(this));
         uint256 crvBalance = UNDERLYNG_ASSET.balanceOf(address(this));
-        if (crvBalance == 0) return false;
+        if (crvBalance == 0 && cvxBalance == 0) return false;
+        if (cvxBalance > 0) {
+            CVX.safeApprove(ETH_CVX, cvxBalance);
+            uint256 ethAmount = ICurvePool(ETH_CVX).exchange(1, 0, cvxBalance, 0, true);
+            crvBalance += ICurvePool(TRICRV).exchange_underlying{value: ethAmount}(
+                1, 2, ethAmount, 0, address(this)
+            );
+        }
         _deposit(crvBalance);
         return true;
     }
-
+    /// @return the amount of CRV tokens in exchange of cvxCRV underlying tokens
     function previewUnwrap(uint256 amount) public view returns (uint256) {
         return ICurvePool(CVXCRV_CRV_POOL).get_dy(1, 0, amount);
     }
+    
+    receive() external payable {}
 
     /*///////////////////////////////////////////////////////////////
                             FUNCTION OVERRIDES
@@ -115,4 +156,5 @@ contract CRVStakingVault is ERC20 {
     function symbol() public pure override returns (string memory) {
         return "CRVv";
     }
+
 }

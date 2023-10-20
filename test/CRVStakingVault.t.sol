@@ -104,18 +104,18 @@ contract CurveLPVaultTest is Test {
         assertEq(rewards.earned(address(vault)), 0);
     }
 
-    function testCompoundCRVRewardsWithProfitNoUnwrap() public {
+    function testWithdrawCRVRewardsWithProfitNoUnwrap() public {
         uint256 underlyingBalanceBefore = testCompoundCRVRewards();
         assertGt(vault.withdraw(vault.balanceOf(address(this)), false), underlyingBalanceBefore);
     }
 
-    function testCompoundCRVRewardsWithProfitUnwrap() public {
+    function testWithdrawCRVRewardsWithProfitUnwrap() public {
         uint256 underlyingBalanceBefore = testCompoundCRVRewards();
         uint256 underlyingBalanceAfter = vault.balanceOfUnderlying(address(this));
         assertGt(underlyingBalanceAfter, underlyingBalanceBefore);
         uint256 expectedCrv = vault.previewUnwrap(underlyingBalanceAfter);
         assertEq(vault.withdraw(vault.balanceOf(address(this)), true), expectedCrv);
-        assertEq(CRV.balanceOf(address(this)),expectedCrv);
+        assertEq(CRV.balanceOf(address(this)), expectedCrv);
     }
 
     function getCRV() public returns (uint256 crvAmount) {
