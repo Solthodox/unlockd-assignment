@@ -1,66 +1,22 @@
-## Foundry
+## Convex Vaults
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This solution implements the Convex protocol contracts.
+## Bried overview
 
-Foundry consists of:
+Convex is meant for two type of [Curve.fi](https://curve.fi/) users, allowing them to manage their positions easily and earn extra rewards in form of `CRV` tokens and Convex's `CVX` tokens:
+- Liquidity providers
+- CRV stakers
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+That's why this project has been set in 2 separate contracts:
+ - CurveLPVault : for the liquidity providers
+ - CRVStakingVault : for the CRV stakers
 
-## Documentation
 
-https://book.getfoundry.sh/
 
-## Usage
+## Setup
+Set `MAINNET_RPC_URL` environment variable in a `.env` file.
 
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+## Run tests
+```bash
+forge test
 ```
