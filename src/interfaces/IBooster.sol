@@ -2,6 +2,8 @@
 pragma solidity 0.8.21;
 
 interface IBooster {
+    function deposit(uint256 _pid, uint256 _amount, bool _stake) external returns (bool);
+    function withdraw(uint256 _pid, uint256 _amount) external returns (bool);
     function owner() external view returns (address);
     function feeToken() external view returns (address);
     function feeDistro() external view returns (address);
