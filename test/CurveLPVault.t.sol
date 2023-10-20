@@ -17,12 +17,13 @@ contract CurveLPVaultTest is Test {
     using SafeTransferLib for address;
 
     address constant sETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
+    address constant cvx = 0xD533a949740bb3306d119CC777fa900bA034cd52;
     // ETH/sETH LP token
     address constant LP_TOKEN = 0x06325440D014e39736583c165C2963BA99fAf14E;
     // ETH/sETH pool
     ICurvePool constant POOL = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
     CurveLPVault vault;
-    IRewards constant rewards = IRewards(0x0A760466E1B4621579a82a39CB56Dda2F4E70f03); 
+    IRewards constant rewards = IRewards(0x0A760466E1B4621579a82a39CB56Dda2F4E70f03);
     uint256 mainnetFork;
     // set up environment variable in .env
     string MAINNET_RPC_URL = vm.envString("MAINNET_RPC_URL");
@@ -34,15 +35,15 @@ contract CurveLPVaultTest is Test {
         vault = new CurveLPVault();
     }
 
-    function testFailDepositExceedsBalance() public {
+    function testFailDepositLPTokensExceedsBalance() public {
         vault.deposit(10000000000000 ether);
     }
 
-    function testFailDepositAmountZero() public {
+    function testFailDepositLPTokensAmountZero() public {
         vault.deposit(0);
     }
 
-    function testDeposit() public returns (uint256 shares) {
+    function testDepositLPTokens() public returns (uint256 shares) {
         // get Curve LP tokens
         uint256 lpTokens = getLPTokens();
         LP_TOKEN.safeApprove(address(vault), lpTokens);
@@ -55,33 +56,37 @@ contract CurveLPVaultTest is Test {
         assertEq(shares, vault.balanceOfUnderlying(address(this)));
     }
 
-    function testFailWithdrawAmountExceedsBalance() public {
+    function testFailWithdrawLPTokensAmountExceedsBalance() public {
         vault.withdraw(10000);
     }
 
-    function testWithdraw() public {
-        uint256 shares = testDeposit();
+    function testFailWithdrawLPTokensInsufficientBalance() public {
+        uint256 shares = testDepositLPTokens();
+        vault.withdraw(shares + 1);
+    }
+
+    function testWithdrawLPTokens() public {
+        uint256 shares = testDepositLPTokens();
         vm.expectEmit();
         uint256 expectedAmountOut = vault.balanceOfUnderlying(address(this));
-        emit Withdraw(address(this), shares,expectedAmountOut );
+        emit Withdraw(address(this), shares, expectedAmountOut);
         uint256 amountOut = vault.withdraw(shares);
         assertEq(amountOut, expectedAmountOut);
         assertEq(LP_TOKEN.balanceOf(address(this)), amountOut);
         assertEq(vault.balanceOf(address(this)), 0);
     }
 
-    function testCompoundRewardsWithoutRewardsAvailable() public {
-        testDeposit();
-        assertEq(rewards.earned(address(vault)) , 0);
+    function testCompoundLPTokensRewardsWithoutRewardsAvailable() public {
+        testDepositLPTokens();
         assertFalse(vault.compoundRewards());
-    } 
+    }
 
-    function testCompoundRewards() public returns(uint256 underlyingBalanceBefore){
-        testDeposit();
+    function testCompoundLPTokensRewards() public returns (uint256 underlyingBalanceBefore) {
+        testDepositLPTokens();
         // more than 1 week afer
         vm.rollFork(block.number + 10_000);
         uint256 crvEarned = rewards.earned(address(vault));
-        assertGt(crvEarned , 0);
+        assertGt(crvEarned, 0);
         uint256 stakedBefore = rewards.balanceOf(address(vault));
         underlyingBalanceBefore = vault.balanceOfUnderlying(address(this));
         assertTrue(vault.compoundRewards());
@@ -89,11 +94,15 @@ contract CurveLPVaultTest is Test {
         assertGt(underlyingBalanceAfter, underlyingBalanceBefore);
         uint256 stakedAfter = rewards.balanceOf(address(vault));
         assertGt(stakedAfter, stakedBefore);
+        assertEq(address(vault).balance, 0);
+        assertEq(sETH.balanceOf(address(vault)), 0);
+        assertEq(cvx.balanceOf(address(vault)), 0);
+        assertEq(rewards.earned(address(vault)), 0);
     }
 
-    function testWithdrawRewardsWithProfit() public {
-        uint256 underlyingBalanceBefore = testCompoundRewards();
-        assertGt(vault.withdraw(vault.balanceOf(address(this))),underlyingBalanceBefore);
+    function testWithdrawLPTokensRewardsWithProfit() public {
+        uint256 underlyingBalanceBefore = testCompoundLPTokensRewards();
+        assertGt(vault.withdraw(vault.balanceOf(address(this))), underlyingBalanceBefore);
     }
 
     // add liquidity to ETH/stETH to get LP tokens

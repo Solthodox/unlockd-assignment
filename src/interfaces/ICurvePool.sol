@@ -13,10 +13,17 @@ interface ICurvePool {
         external
         payable
         returns (uint256);
+
+    function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy, bool use_eth)
+        external
+        payable
+        returns (uint256);
     function coins(uint256) external view returns (address);
 
     function exchange_underlying(uint256 i, uint256 j, uint256 dx, uint256 min_dy, address receiver)
         external
         payable
         returns (uint256);
+
+    function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
 }
