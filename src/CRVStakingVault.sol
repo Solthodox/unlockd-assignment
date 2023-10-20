@@ -81,6 +81,10 @@ contract CRVStakingVault is ERC20 {
         return _calculateUnderlyingBalance(balanceOf(account));
     }
 
+    function totalAssets() public view virtual returns (uint256){
+        return CVXCRV_REWARDER.balanceOf(address(this));
+    }
+
     function _calculateUnderlyingBalance(uint256 balance) private view returns (uint256) {
         return CVXCRV_REWARDER.balanceOf(address(this)) * balance / totalSupply();
     }
