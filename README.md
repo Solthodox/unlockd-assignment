@@ -18,7 +18,9 @@ The vaults are designed to supercharge user yields by compounding all rewards an
 
 ## Functions
 
-- `deposit`: deposit a amount of tokens in the vault
+- `deposit`: deposit a amount of tokens in the vault.
+- `withdraw` : burns vault shares to get the corresponding underlying tokens.
+- `compoundRewards` : claims all the rewards and deposits them back again, to increment the underlying tokens for all the vault share owners.
 
 ## Getting started
 Set `MAINNET_RPC_URL` environment variable in a `.env` file.
