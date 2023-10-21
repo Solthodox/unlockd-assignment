@@ -16,6 +16,10 @@ That's why this project has been set in 2 separate contracts, that interact with
 
 The vaults are designed to supercharge user yields by compounding all rewards and distributing them in the underlying token, eliminating the need for users to claim various tokens from different sources. 
 
+## Strategy
+
+In every reward compounding, the vault claims all the earned CRV and CVX. Then performs the needed swaps in Curve to obtain more underlying tokens, and deposit them back again. 
+
 ## Functions
 
 - `deposit`: deposit a amount of tokens in the vault.
