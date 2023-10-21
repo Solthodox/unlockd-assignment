@@ -24,6 +24,7 @@ contract CRVStakingVault is ERC20 {
     event Withdraw(
         address indexed withdrawer, uint256 indexed shares, uint256 indexed amountUnderlying
     );
+    event CompoundRewards(uint256 earned, uint256 indexed timestamp);
 
     using SafeTransferLib for address;
 
@@ -40,6 +41,7 @@ contract CRVStakingVault is ERC20 {
     /// @notice TriCRV pool used to exchange crv rewards for eth
     address constant TRICRV = 0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14;
 
+    /// @notice ETH/CVX pool used to exchange crv rewards for eth
     address constant ETH_CVX = 0xB576491F1E6e5E62f1d8F26062Ee822B40B0E0d4;
 
     /// @notice Rewards contract for CVXCRV
@@ -120,8 +122,10 @@ contract CRVStakingVault is ERC20 {
         return CVXCRV_REWARDER.balanceOf(address(this)) * balance / totalSupply();
     }
 
-    /// @notice reinvests the crv rewards to increase the position in the underlying token
+    /// @notice reinvests the CRV and CVX rewards to increase the position in the underlying token
+    /// @return true if any rewards were compounded
     function compoundRewards() external returns (bool) {
+        // claim crv and cvx rewards from stake contract
         if (!IRewards(CVXCRV_REWARDER).getReward(address(this), false)) {
             revert CRVStakingVault__Compound_ClaimNotWorking();
         }
@@ -129,6 +133,7 @@ contract CRVStakingVault is ERC20 {
         uint256 crvBalance = UNDERLYNG_ASSET.balanceOf(address(this));
         if (crvBalance == 0 && cvxBalance == 0) return false;
         if (cvxBalance > 0) {
+            // exchange CVX for CRV
             CVX.safeApprove(ETH_CVX, cvxBalance);
             uint256 ethAmount = ICurvePool(ETH_CVX).exchange(1, 0, cvxBalance, 0, true);
             crvBalance += ICurvePool(TRICRV).exchange_underlying{value: ethAmount}(
@@ -136,6 +141,7 @@ contract CRVStakingVault is ERC20 {
             );
         }
         _deposit(crvBalance);
+        emit CompoundRewards(crvBalance , block.timestamp);
         return true;
     }
     /// @return the amount of CRV tokens in exchange of cvxCRV underlying tokens

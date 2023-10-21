@@ -22,8 +22,8 @@ contract CurveLPVaultTest is Test {
     CRVStakingVault vault;
     IRewards constant rewards = IRewards(0x3Fe65692bfCD0e6CF84cB1E7d24108E434A7587e);
 
-    uint256 mainnetFork;
 
+    uint256 mainnetFork;
     // set up environment variable in .env
     string MAINNET_RPC_URL = vm.envString("MAINNET_RPC_URL");
 

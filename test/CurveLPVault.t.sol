@@ -18,12 +18,11 @@ contract CurveLPVaultTest is Test {
 
     address constant sETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
     address constant cvx = 0xD533a949740bb3306d119CC777fa900bA034cd52;
-    // ETH/sETH LP token
     address constant LP_TOKEN = 0x06325440D014e39736583c165C2963BA99fAf14E;
-    // ETH/sETH pool
     ICurvePool constant POOL = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
     CurveLPVault vault;
     IRewards constant rewards = IRewards(0x0A760466E1B4621579a82a39CB56Dda2F4E70f03);
+    
     uint256 mainnetFork;
     // set up environment variable in .env
     string MAINNET_RPC_URL = vm.envString("MAINNET_RPC_URL");
