@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.21;
 
-import {ERC20} from "solady/src/tokens/ERC20.sol";
+import {ERC4626} from "solady/src/tokens/ERC4626.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {IBooster} from "./interfaces/IBooster.sol";
 import {ICrvDepositor} from "./interfaces/ICrvDepositor.sol";
@@ -10,7 +10,7 @@ import {ICurvePool} from "./interfaces/ICurvePool.sol";
 
 /// @notice implements the Convex functions for Curve liquidity providers
 /// @notice best approach would be ERC4626 but since you asked for {deposit} and {withdraw} functions only:
-contract CurveLPVault is ERC20 {
+contract CurveLPVault is ERC4626 {
     /*///////////////////////////////////////////////////////////////
                             ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -22,10 +22,6 @@ contract CurveLPVault is ERC20 {
     /*///////////////////////////////////////////////////////////////
                             EVENTS
     //////////////////////////////////////////////////////////////*/
-    event Deposit(address indexed depositor, uint256 indexed amountUnderlying);
-    event Withdraw(
-        address indexed withdrawer, uint256 indexed shares, uint256 indexed amountUnderlying
-    );
     event CompoundRewards(uint256 earned, uint256 indexed timestamp);
 
     using SafeTransferLib for address;
@@ -72,7 +68,7 @@ contract CurveLPVault is ERC20 {
                         DEPOSIT/WITHDRAW LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function _deposit(uint256 amount) internal {
+    function _depositIntoBooster(uint256 amount) internal {
         UNDERLYNG_ASSET.safeApprove(CONVEX_BOOSTER, amount);
         // we set staking to true to receive boosted crv rewards
         if (!IBooster(CONVEX_BOOSTER).deposit(POOL_ID, amount, true)) {
@@ -80,49 +76,22 @@ contract CurveLPVault is ERC20 {
         }
     }
 
-    /// @notice Deposit steCRV LP tokens in Convex
-    /// @param amount amount of underlying asset tokens to deposit
-    function deposit(uint256 amount) external returns (uint256 shares) {
-        if (amount == 0) revert CurveLPVault__Deposit_AmountIsZero();
-        UNDERLYNG_ASSET.safeTransferFrom(msg.sender, address(this), amount);
-        _deposit(amount);
-        // mint shares
-        _mint(msg.sender, shares = amount);
-        emit Deposit(msg.sender, amount);
+    function _afterDeposit(uint256 assets,uint256) internal override{
+        _depositIntoBooster(assets);
+        
     }
 
-    /// @notice withdraws the underlying balance pro-rata to the shares
-    /// @param amount the amount of vault shares to burn
-    function withdraw(uint256 amount) external returns (uint256 amountUnderlying) {
-        // calculate lp token amount
-        amountUnderlying = _calculateUnderlyingBalance(amount);
-        // burn shares
-        _burn(msg.sender, amount);
-        // withdraw lp tokens from stake contract
-        if (!IRewards(POOL_REWARDER).withdrawAndUnwrap(amountUnderlying, false)) {
+    function  _beforeWithdraw(uint256 assets, uint256) internal override {
+        if (!IRewards(POOL_REWARDER).withdrawAndUnwrap(assets, false)) {
             revert CurveLPVault__Withdraw_CouldNotWithdraw();
-        }
-        UNDERLYNG_ASSET.safeTransfer(msg.sender, amountUnderlying);
-        emit Withdraw(msg.sender, amount, amountUnderlying);
+        } 
     }
 
     /*///////////////////////////////////////////////////////////////
                         COMPOUND/CALCULATIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @return the underlying tokens(initial deposit + yield) of a user
-    function balanceOfUnderlying(address account) external view returns (uint256) {
-        return _calculateUnderlyingBalance(balanceOf(account));
-    }
-    
-    /// @return the total underlying tokens held by the vault
-    function totalAssets() public view virtual returns (uint256) {
-        return POOL_REWARDER.balanceOf(address(this));
-    }
 
-    function _calculateUnderlyingBalance(uint256 balance) private view returns (uint256) {
-        return POOL_REWARDER.balanceOf(address(this)) * balance / totalSupply();
-    }
 
     /// @notice reinvests the CRV and CVX rewards to increase the position in the underlying token
     /// @return true if any rewards were compounded
@@ -159,13 +128,17 @@ contract CurveLPVault is ERC20 {
         );
         UNDERLYNG_ASSET.safeApprove(CONVEX_BOOSTER, mintedLiquidity);
         // deposit the LP tokens in the Booster again
-        if (!IBooster(CONVEX_BOOSTER).deposit(POOL_ID, mintedLiquidity, true)) {
-            revert CurveLPVault__Deposit_CouldNotDeposit();
-        }
+        _depositIntoBooster(mintedLiquidity);
         emit CompoundRewards(mintedLiquidity, block.timestamp);
         return true;
     }
 
+    /// @return the total underlying tokens held by the vault
+    function totalAssets() public view override returns (uint256) {
+        return POOL_REWARDER.balanceOf(address(this));
+    }
+
+    /// @notice allow receiving ETH
     receive() external payable {}
 
     /*///////////////////////////////////////////////////////////////
@@ -178,6 +151,10 @@ contract CurveLPVault is ERC20 {
 
     function symbol() public pure override returns (string memory) {
         return "steCRVv";
+    }
+
+    function asset() public pure override returns (address){
+        return UNDERLYNG_ASSET;
     }
 
 }

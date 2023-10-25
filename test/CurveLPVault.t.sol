@@ -35,11 +35,11 @@ contract CurveLPVaultTest is Test {
     }
 
     function testFailDepositLPTokensExceedsBalance() public {
-        vault.deposit(10000000000000 ether);
+        vault.deposit(10000000000000 ether, address(this));
     }
 
     function testFailDepositLPTokensAmountZero() public {
-        vault.deposit(0);
+        vault.deposit(0, address(this));
     }
 
     function testDepositLPTokens() public returns (uint256 shares) {
@@ -47,29 +47,25 @@ contract CurveLPVaultTest is Test {
         uint256 lpTokens = getLPTokens();
         LP_TOKEN.safeApprove(address(vault), lpTokens);
         // deposit the LP tokens in the vault
-        vm.expectEmit();
-        emit Deposit(address(this), lpTokens);
-        shares = vault.deposit(lpTokens);
+        shares = vault.deposit(lpTokens, address(this));
         assertEq(shares, vault.balanceOf(address(this)));
         assertEq(shares, lpTokens);
-        assertEq(shares, vault.balanceOfUnderlying(address(this)));
+        assertEq(shares, vault.maxWithdraw(address(this)));
     }
 
-    function testFailWithdrawLPTokensAmountExceedsBalance() public {
-        vault.withdraw(10000);
+    function testFailRedeemLPTokensAmountExceedsBalance() public {
+        vault.redeem(10000, address(this), address(this));
     }
 
-    function testFailWithdrawLPTokensInsufficientBalance() public {
+    function testFailRedeemLPTokensInsufficientBalance() public {
         uint256 shares = testDepositLPTokens();
-        vault.withdraw(shares + 1);
+        vault.redeem(shares + 1, address(this), address(this));
     }
 
-    function testWithdrawLPTokens() public {
+    function testRedeemLPTokens() public {
         uint256 shares = testDepositLPTokens();
-        vm.expectEmit();
-        uint256 expectedAmountOut = vault.balanceOfUnderlying(address(this));
-        emit Withdraw(address(this), shares, expectedAmountOut);
-        uint256 amountOut = vault.withdraw(shares);
+        uint256 expectedAmountOut = vault.maxWithdraw(address(this));
+        uint256 amountOut = vault.redeem(shares, address(this), address(this));
         assertEq(amountOut, expectedAmountOut);
         assertEq(LP_TOKEN.balanceOf(address(this)), amountOut);
         assertEq(vault.balanceOf(address(this)), 0);
@@ -87,9 +83,9 @@ contract CurveLPVaultTest is Test {
         uint256 crvEarned = rewards.earned(address(vault));
         assertGt(crvEarned, 0);
         uint256 stakedBefore = rewards.balanceOf(address(vault));
-        underlyingBalanceBefore = vault.balanceOfUnderlying(address(this));
+        underlyingBalanceBefore = vault.maxWithdraw(address(this));
         assertTrue(vault.compoundRewards());
-        uint256 underlyingBalanceAfter = vault.balanceOfUnderlying(address(this));
+        uint256 underlyingBalanceAfter = vault.maxWithdraw(address(this));
         assertGt(underlyingBalanceAfter, underlyingBalanceBefore);
         uint256 stakedAfter = rewards.balanceOf(address(vault));
         assertGt(stakedAfter, stakedBefore);
@@ -101,7 +97,7 @@ contract CurveLPVaultTest is Test {
 
     function testWithdrawLPTokensRewardsWithProfit() public {
         uint256 underlyingBalanceBefore = testCompoundLPTokensRewards();
-        assertGt(vault.withdraw(vault.balanceOf(address(this))), underlyingBalanceBefore);
+        assertGt(vault.redeem(vault.balanceOf(address(this)), address(this), address(this)), underlyingBalanceBefore);
     }
 
     // add liquidity to ETH/stETH to get LP tokens
