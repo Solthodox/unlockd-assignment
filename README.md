@@ -1,3 +1,5 @@
+**Note:** Implemented an alternative solution in one of the contracts after the interview
+
 ## Convex Vaults
 
 This solution implements the `Convex`` protocol contracts.
