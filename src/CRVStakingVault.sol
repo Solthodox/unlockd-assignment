@@ -66,12 +66,28 @@ contract CRVStakingVault is ERC20 {
     /*///////////////////////////////////////////////////////////////
                         DEPOSIT/WITHDRAW LOGIC
     //////////////////////////////////////////////////////////////*/
-
-
+    
     function _deposit(uint256 amount) internal {
         UNDERLYNG_ASSET.safeApprove(CONVEX_CRV_DEPOSITOR, amount);
         // deposit locking the CRV permanently to get higher yield
-        ICrvDepositor(CONVEX_CRV_DEPOSITOR).deposit(amount, true, CVXCRV_REWARDER);
+        assembly {
+            let ptr := mload(0x40) //cache the free memory pointer
+            mstore(0x60,0x3Fe65692bfCD0e6CF84cB1E7d24108E434A7587e) // CVXCRV_REWARDER
+            mstore(0x40, 1) // true
+            mstore(0x20, amount) // amount
+            mstore(0x0c,0x80ed71e4000000000000000000000000) // deposit(uint256,bool,address)
+
+            if iszero(
+                call(gas(), 0x8014595F2AB54cD7c604B00E9fb932176fDc86Ae, 0, 0x1c, 0x64, 0x00, 0x00)// function doesnt return anything
+            ) {
+                // if reverts 
+                mstore(0x00, 0xe9d86c23) // store error `CRVStakingVault__Deposit_DepositFailed()`.
+                revert(0x1c, 0x04) // revert with the error
+            }
+            mstore(0x60, 0) // Restore the zero slot to zero.
+            mstore(0x40, ptr) // Restore the free memory pointer.
+        }
+        //ICrvDepositor(CONVEX_CRV_DEPOSITOR).deposit(amount, true, CVXCRV_REWARDER);
     }
 
     /// @notice Deposit and permanently stake a amount of CRV token in Convex
